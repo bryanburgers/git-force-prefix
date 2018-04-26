@@ -1,0 +1,8 @@
+[package]
+name = "git-prefix"
+version = "0.1.0"
+authors = ["Bryan Burgers <bryan.burgers@ravenind.com>"]
+
+[dependencies]
+rayon = "^1.0.1"
+sha1 = "^0.6.0"
