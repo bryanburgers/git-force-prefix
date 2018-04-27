@@ -14,8 +14,11 @@ pub struct Commit {
     pub message: String,
 }
 
+#[derive(Debug)]
+pub struct CommitError;
+
 impl Commit {
-    pub fn parse(commit: &str) -> Commit {
+    pub fn parse(commit: &str) -> Result<Commit, CommitError> {
         let mut i = commit.splitn(2, "\n\n");
         let header = i.next().unwrap();
         let message = i.next().unwrap().to_string();
@@ -49,7 +52,7 @@ impl Commit {
             }
         }
 
-        Commit {
+        let commit = Commit {
             preamble: preamble,
             author: author,
             author_timestamp: author_timestamp,
@@ -58,7 +61,9 @@ impl Commit {
             committer_timestamp: committer_timestamp,
             committer_timezone: committer_tz,
             message: message,
-        }
+        };
+
+        Ok(commit)
     }
 }
 
@@ -76,7 +81,7 @@ committer Bryan Burgers <bryan@burgers.io> 1524753225 -0500
 Test commit
 "#;
 
-        let commit = Commit::parse(commit);
+        let commit = Commit::parse(commit).unwrap();
 
         assert_eq!(
             commit.preamble,
@@ -102,7 +107,7 @@ committer Bryan Burgers <bryan@burgers.io> 1524680608 -0500
 Initial commit
 "#;
 
-        let commit = Commit::parse(commit);
+        let commit = Commit::parse(commit).unwrap();
 
         assert_eq!(
             commit.preamble,

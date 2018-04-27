@@ -12,33 +12,32 @@ use std::iter::Iterator;
 use std::process::{exit, Command};
 
 fn main() {
-    let arg = std::env::args().nth(1).unwrap_or("".to_string());
-    if arg == "" {
-        eprintln!("usage: git-prefix <hexstring>");
-        exit(1);
+    let result = run();
+
+    // If run() failed, handle it with the correct output and exit code.
+    if let Some(err) = result.err() {
+        let exit_code = err.output_and_exit_code();
+        exit(exit_code);
     }
+}
+
+fn run() -> Result<(), ApplicationError> {
+    let arg = std::env::args()
+        .nth(1)
+        .ok_or(ApplicationError::MissingPrefixArgument)?;
+
+    let search = Search::parse(&arg).map_err(|search::SearchError { ch, pos }| {
+        ApplicationError::InvalidPrefixArgument(arg, ch as char, pos)
+    })?;
 
     let output = Command::new("git")
         .args(&["cat-file", "commit", "HEAD"])
         .output()
-        .expect("Failed to call git");
+        .map_err(|_| ApplicationError::GitCatFileFailed)?;
 
-    let output = match String::from_utf8(output.stdout) {
-        Ok(s) => s,
-        Err(_) => {
-            eprintln!("Git commit was not UTF-8");
-            exit(1);
-        }
-    };
+    let output = String::from_utf8(output.stdout).map_err(|_| ApplicationError::CommitNotUTF8)?;
 
-    let commit = Commit::parse(&output);
-    let search = match Search::parse(&arg) {
-        Ok(search) => search,
-        Err(_) => {
-            eprintln!("Invalid argument '{}'. Must be a hex string.", arg);
-            exit(1);
-        }
-    };
+    let commit = Commit::parse(&output).map_err(|_| ApplicationError::CommitParseFailed)?;
 
     let new_commit = force_prefix(&commit, &search);
 
@@ -49,6 +48,8 @@ fn main() {
         new_commit.author_timestamp,
         new_commit.author_timezone
     );
+
+    Ok(())
 }
 
 fn force_prefix(commit: &Commit, search: &Search) -> Commit {
@@ -175,4 +176,39 @@ fn calculate_hash_predigest(
 
     let digest = m.digest();
     digest.bytes()
+}
+
+enum ApplicationError {
+    MissingPrefixArgument,
+    GitCatFileFailed,
+    CommitNotUTF8,
+    CommitParseFailed,
+    InvalidPrefixArgument(String, char, usize),
+}
+
+impl ApplicationError {
+    fn output_and_exit_code(&self) -> i32 {
+        match *self {
+            ApplicationError::MissingPrefixArgument => {
+                eprintln!("usage: git-prefix <hexstring>");
+                1
+            }
+            ApplicationError::GitCatFileFailed => {
+                eprintln!("ERROR: Failed to call git. Is the current directory a repo?");
+                1
+            }
+            ApplicationError::CommitNotUTF8 => {
+                eprintln!("ERROR: The commit could not be parsed as UTF-8");
+                1
+            }
+            ApplicationError::CommitParseFailed => {
+                eprintln!("ERROR: Failed to parse the commit");
+                1
+            }
+            ApplicationError::InvalidPrefixArgument(ref arg, ref ch, ref pos) => {
+                eprintln!("Invalid argument '{}'. Character '{}' at position {} is not a hexidecimal character.", arg, ch, pos + 1);
+                1
+            }
+        }
+    }
 }

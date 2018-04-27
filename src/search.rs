@@ -1,13 +1,18 @@
-use std::io::{Error, ErrorKind};
-
+#[derive(Debug)]
 pub struct Search {
     compare_len: usize,
     bytes: Vec<u8>,
     odd: Option<u8>,
 }
 
+#[derive(Debug)]
+pub struct SearchError {
+    pub ch: u8,
+    pub pos: usize,
+}
+
 impl Search {
-    pub fn parse(s: &str) -> Result<Search, Error> {
+    pub fn parse(s: &str) -> Result<Search, SearchError> {
         let mut i = 0;
         let bytes = s.as_bytes();
         let mut vec = Vec::new();
@@ -17,7 +22,10 @@ impl Search {
                 b'a'...b'f' => bytes[i] - b'a' + 10,
                 b'0'...b'9' => bytes[i] - b'0',
                 _ => {
-                    return Err(Error::new(ErrorKind::Other, "Digit was not a hex digit"));
+                    return Err(SearchError {
+                        ch: bytes[i],
+                        pos: i,
+                    });
                 }
             };
             let b2 = match bytes[i + 1] {
@@ -25,7 +33,10 @@ impl Search {
                 b'a'...b'f' => bytes[i + 1] - b'a' + 10,
                 b'0'...b'9' => bytes[i + 1] - b'0',
                 _ => {
-                    return Err(Error::new(ErrorKind::Other, "Digit was not a hex digit"));
+                    return Err(SearchError {
+                        ch: bytes[i + 1],
+                        pos: i + 1,
+                    });
                 }
             };
             let v = b1 << 4 | b2;
@@ -43,7 +54,10 @@ impl Search {
                     b'a'...b'f' => Some(b - b'a' + 10),
                     b'0'...b'9' => Some(b - b'0'),
                     _ => {
-                        panic!("Invalid!");
+                        return Err(SearchError {
+                            ch: b,
+                            pos: s.len() - 1,
+                        });
                     }
                 }
             }
@@ -77,10 +91,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_failed_parse() {
-        let s = Search::parse("wtf");
+    fn test_failed_parse_high() {
+        let s = Search::parse("00z0");
 
         assert!(s.is_err());
+
+        let SearchError { ch, pos } = s.unwrap_err();
+        assert_eq!(ch, b'z');
+        assert_eq!(pos, 2);
+    }
+
+    #[test]
+    fn test_failed_parse_low() {
+        let s = Search::parse("000z");
+
+        assert!(s.is_err());
+
+        let SearchError { ch, pos } = s.unwrap_err();
+        assert_eq!(ch, b'z');
+        assert_eq!(pos, 3);
+    }
+
+    #[test]
+    fn test_failed_parse_odd() {
+        let s = Search::parse("0000z");
+
+        assert!(s.is_err());
+
+        let SearchError { ch, pos } = s.unwrap_err();
+        assert_eq!(ch, b'z');
+        assert_eq!(pos, 4);
     }
 
     #[test]
