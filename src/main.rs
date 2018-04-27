@@ -1,9 +1,11 @@
+extern crate clap;
 extern crate rayon;
 extern crate sha1;
 
 mod commit;
 mod search;
 
+use clap::{App, Arg};
 use commit::Commit;
 use rayon::prelude::*;
 use search::Search;
@@ -22,13 +24,26 @@ fn main() {
 }
 
 fn run() -> Result<(), ApplicationError> {
-    let arg = std::env::args()
-        .nth(1)
-        .ok_or(ApplicationError::MissingPrefixArgument)?;
+    let matches = App::new("git prefix")
+        .author("Bryan Burgers <bryan@burgers.io>")
+        .version("0.1.0")
+        .about("Force a commit hash to have a given prefix")
+        .arg(
+            Arg::with_name("prefix")
+                .help("The hexidecimal prefix to calculate")
+                .required(true)
+                .validator(|hex| {
+                    Search::parse(&hex).map_err(|search::SearchError { ch, pos }| {
+                        format!("In '{}', the character '{}' at position {} is not a hexidecimal character.", hex, ch as char, pos + 1)
+                    })?;
+                    Ok(())
+                }),
+        )
+        .get_matches();
 
-    let search = Search::parse(&arg).map_err(|search::SearchError { ch, pos }| {
-        ApplicationError::InvalidPrefixArgument(arg, ch as char, pos)
-    })?;
+    // Both of these unwraps are safe because the argument processor already validated that prefix
+    // exists and can be successfully parsed by Search::parse.
+    let search = Search::parse(matches.value_of("prefix").unwrap()).unwrap();
 
     let output = Command::new("git")
         .args(&["cat-file", "commit", "HEAD"])
@@ -179,20 +194,14 @@ fn calculate_hash_predigest(
 }
 
 enum ApplicationError {
-    MissingPrefixArgument,
     GitCatFileFailed,
     CommitNotUTF8,
     CommitParseFailed,
-    InvalidPrefixArgument(String, char, usize),
 }
 
 impl ApplicationError {
     fn output_and_exit_code(&self) -> i32 {
         match *self {
-            ApplicationError::MissingPrefixArgument => {
-                eprintln!("usage: git-prefix <hexstring>");
-                1
-            }
             ApplicationError::GitCatFileFailed => {
                 eprintln!("ERROR: Failed to call git. Is the current directory a repo?");
                 1
@@ -203,10 +212,6 @@ impl ApplicationError {
             }
             ApplicationError::CommitParseFailed => {
                 eprintln!("ERROR: Failed to parse the commit");
-                1
-            }
-            ApplicationError::InvalidPrefixArgument(ref arg, ref ch, ref pos) => {
-                eprintln!("Invalid argument '{}'. Character '{}' at position {} is not a hexidecimal character.", arg, ch, pos + 1);
                 1
             }
         }

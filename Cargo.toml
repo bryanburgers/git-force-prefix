@@ -3,6 +3,10 @@ name = "git-prefix"
 version = "0.1.0"
 authors = ["Bryan Burgers <bryan.burgers@ravenind.com>"]
 
+[profile.release]
+lto = true
+
 [dependencies]
+clap = "^2.31.2"
 rayon = "^1.0.1"
 sha1 = "^0.6.0"
