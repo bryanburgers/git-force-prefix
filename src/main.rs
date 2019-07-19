@@ -1,7 +1,3 @@
-extern crate clap;
-extern crate rayon;
-extern crate sha1;
-
 mod commit;
 mod search;
 
@@ -74,7 +70,7 @@ fn run() -> Result<(), ApplicationError> {
 }
 
 /// Find a new commit blob, based on the given one, that has a commit hash that matches the search.
-fn force_prefix(commit: &Commit, search: &Search) -> Commit {
+fn force_prefix<'a>(commit: &'a Commit<'a>, search: &Search) -> Commit<'a> {
     // First, pre-create as much of the SHA1 hash and the constituent parts as possible.
     let a = format!("{}author {} ", commit.preamble, commit.author);
     let a = a.as_bytes();
@@ -86,12 +82,6 @@ fn force_prefix(commit: &Commit, search: &Search) -> Commit {
     let c = format!(" {}\n\n{}", commit.committer_timezone, commit.message);
     let c = c.as_bytes();
 
-    let mut iter = 0..;
-    let mut found = false;
-
-    let mut author_timestamp = 0;
-    let mut committer_timestamp = 0;
-
     let len = a.len() + 10 + b.len() + 10 + c.len();
 
     let mut m = sha1::Sha1::new();
@@ -99,6 +89,12 @@ fn force_prefix(commit: &Commit, search: &Search) -> Commit {
     m.update(len.to_string().as_bytes());
     m.update(b"\0");
     m.update(a);
+
+    let mut iter = 0..;
+    let mut found = false;
+
+    let mut author_timestamp = 0;
+    let mut committer_timestamp = 0;
 
     // Keep incrementing the committer timestamp until we can find a commit that matches...
     while !found {
@@ -117,11 +113,7 @@ fn force_prefix(commit: &Commit, search: &Search) -> Commit {
             let f = search.test(&h);
             if f {
                 // Yay! We found one! Let's write out the bytes.
-                let mut s = String::new();
-                for &byte in h.iter() {
-                    write!(&mut s, "{:02x}", byte).expect("Unable to write");
-                }
-                eprintln!("Found {}", s);
+                eprintln!("Found {}", format_bytes(&h));
             }
             f
         });
@@ -207,6 +199,15 @@ fn calculate_hash_predigest(
 
     let digest = m.digest();
     digest.bytes()
+}
+
+/// Format a slice of bytes into a hexidecimal string
+fn format_bytes(bytes: &[u8]) -> String {
+    let mut s = String::new();
+    for &byte in bytes.iter() {
+        write!(&mut s, "{:02x}", byte).expect("Unable to write");
+    }
+    s
 }
 
 /// List of potential errors that we can run into

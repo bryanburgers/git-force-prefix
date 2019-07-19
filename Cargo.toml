@@ -2,11 +2,12 @@
 name = "git-force-prefix"
 version = "0.1.0"
 authors = ["Bryan Burgers <bryan@burgers.io>"]
+edition = "2018"
 
 [profile.release]
 lto = true
 
 [dependencies]
-clap = "^2.31.2"
-rayon = "^1.0.1"
+clap = "^2.33.0"
+rayon = "^1.1.0"
 sha1 = "^0.6.0"
