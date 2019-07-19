@@ -1,17 +1,30 @@
+/// The representation of the prefix we're looking for
+///
+/// This largely represents a string like `07b1f4`, but is broken apart to optimize checking
+/// against a byte slice that represents a hash.
 #[derive(Debug)]
 pub struct Search {
+    /// The number of bytes in `bytes`
     compare_len: usize,
+    /// Full bytes that need to be compared. E.g., if our string is 07b1f4, this is vec![0x07,
+    /// 0xb1, 0xf4]
     bytes: Vec<u8>,
+    /// If the given string had an odd number of characters, e.g. `07b1f4a`, this represents the
+    /// nibble Some(0x0a) (because it is not a full byte and does not go in bytes).
     odd: Option<u8>,
 }
 
+/// Failure to parse a search string.
 #[derive(Debug)]
 pub struct SearchError {
+    /// The unexpected character.
     pub ch: u8,
+    /// The position in the string.
     pub pos: usize,
 }
 
 impl Search {
+    /// Parse a string into a search object
     pub fn parse(s: &str) -> Result<Search, SearchError> {
         let mut i = 0;
         let bytes = s.as_bytes();
@@ -73,19 +86,25 @@ impl Search {
         })
     }
 
+    /// Test whether a slice of bytes matches the given search.
     #[inline]
     pub fn test(&self, val: &[u8]) -> bool {
+        // Is it a match on the whole bytes?
         if &val[0..self.compare_len] == &self.bytes[..] {
+            // Yes! If all we have is whole bytes, we're good. If we still need to check the odd
+            // nibble, check that too.
             match self.odd {
                 Some(b) => val[self.compare_len] >> 4 == b,
                 None => true,
             }
         } else {
+            // Nope.
             false
         }
     }
 }
 
+/// Test that it works!
 #[cfg(test)]
 mod tests {
     use super::*;

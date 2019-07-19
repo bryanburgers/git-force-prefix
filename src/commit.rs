@@ -1,23 +1,30 @@
+/// A struct that holds the things that we care about about a commit.
 #[derive(Debug, Clone)]
 pub struct Commit {
     /// We don't care what comes before author/committer. Includes the newline.
     pub preamble: String,
     /// The author's name and email
     pub author: String,
+    /// The author timestamp. This is what we will twiddle to create new commit hashes.
     pub author_timestamp: i64,
+    /// The textual timezone (we don't care about this really)
     pub author_timezone: String,
     /// The committer's name and email
     pub committer: String,
+    /// The committer timestamp. This is what we will twiddle to create new commit hashes.
     pub committer_timestamp: i64,
+    /// The textual timezone (we don't care about this really)
     pub committer_timezone: String,
     /// The commit message itself. This typically includes the trailing newline.
     pub message: String,
 }
 
+/// Empty struct that represents that we failed to parse the commit.
 #[derive(Debug)]
 pub struct CommitError;
 
 impl Commit {
+    /// Parse a string into a commit object.
     pub fn parse(commit: &str) -> Result<Commit, CommitError> {
         let mut i = commit.splitn(2, "\n\n");
         let header = i.next().unwrap();
@@ -67,6 +74,7 @@ impl Commit {
     }
 }
 
+/// Test that parsing actually works!
 #[cfg(test)]
 mod tests {
     use super::*;

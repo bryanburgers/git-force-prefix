@@ -24,7 +24,7 @@ fn main() {
 }
 
 fn run() -> Result<(), ApplicationError> {
-    let matches = App::new("git prefix")
+    let matches = App::new("git force-prefix")
         .author("Bryan Burgers <bryan@burgers.io>")
         .version("0.1.0")
         .about("Force a commit hash to have a given prefix")
@@ -45,17 +45,23 @@ fn run() -> Result<(), ApplicationError> {
     // exists and can be successfully parsed by Search::parse.
     let search = Search::parse(matches.value_of("prefix").unwrap()).unwrap();
 
+    // Get HEAD's commit blob
     let output = Command::new("git")
         .args(&["cat-file", "commit", "HEAD"])
         .output()
         .map_err(|_| ApplicationError::GitCatFileFailed)?;
-
     let output = String::from_utf8(output.stdout).map_err(|_| ApplicationError::CommitNotUTF8)?;
 
+    // And parse it into something we can use
     let commit = Commit::parse(&output).map_err(|_| ApplicationError::CommitParseFailed)?;
 
+    // Calculate a NEW commit that matches the prefix that we want. This runs forever until it
+    // succeeds.
     let new_commit = force_prefix(&commit, &search);
 
+    // We've found a new commit that will make this commit match the prefix! Because we only mess
+    // with committer_timestamp and author_timestamp, we need to amend the current commit with
+    // these new values.
     println!(
         "GIT_COMMITTER_DATE=\"{} {}\" git commit --date=\"{} {}\" --amend --no-edit",
         new_commit.committer_timestamp,
@@ -67,7 +73,9 @@ fn run() -> Result<(), ApplicationError> {
     Ok(())
 }
 
+/// Find a new commit blob, based on the given one, that has a commit hash that matches the search.
 fn force_prefix(commit: &Commit, search: &Search) -> Commit {
+    // First, pre-create as much of the SHA1 hash and the constituent parts as possible.
     let a = format!("{}author {} ", commit.preamble, commit.author);
     let a = a.as_bytes();
     let b = format!(
@@ -92,17 +100,23 @@ fn force_prefix(commit: &Commit, search: &Search) -> Commit {
     m.update(b"\0");
     m.update(a);
 
+    // Keep incrementing the committer timestamp until we can find a commit that matches...
     while !found {
         let i = iter.next().unwrap();
 
-        let pi = (0..(i + 1)).into_par_iter();
-        let result = pi.find_any(|j| {
+        // Search (in parallel) as many commits as possible, where the author timestamp is between
+        // the original commit's author timestamp and the new committer timestamp
+        let parallel_iterator = (0..(i + 1)).into_par_iter();
+        let result = parallel_iterator.find_any(|j| {
             let author_timestamp = commit.author_timestamp + j;
             let committer_timestamp = commit.author_timestamp + i;
+            // If we used these timestamps, what would the commit hash be?
             let h =
                 calculate_hash_predigest(m.clone(), author_timestamp, b, committer_timestamp, c);
+            // Does that commit hash match?
             let f = search.test(&h);
             if f {
+                // Yay! We found one! Let's write out the bytes.
                 let mut s = String::new();
                 for &byte in h.iter() {
                     write!(&mut s, "{:02x}", byte).expect("Unable to write");
@@ -136,8 +150,10 @@ fn force_prefix(commit: &Commit, search: &Search) -> Commit {
                 break
             }
         }
-        */    }
+        */
+    }
 
+    // New commit is exactly the same as the old, except with its timestamps changed.
     let mut new_commit = commit.clone();
     new_commit.author_timestamp = author_timestamp;
     new_commit.committer_timestamp = committer_timestamp;
@@ -193,9 +209,13 @@ fn calculate_hash_predigest(
     digest.bytes()
 }
 
+/// List of potential errors that we can run into
 enum ApplicationError {
+    /// We couldn't get the current commit blob
     GitCatFileFailed,
+    /// The commit wasn't UTF-8 (WHO DOES THIS!?)
     CommitNotUTF8,
+    /// We couldn't parse the commit blob
     CommitParseFailed,
 }
 

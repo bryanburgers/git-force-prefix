@@ -1,7 +1,7 @@
 [package]
-name = "git-prefix"
+name = "git-force-prefix"
 version = "0.1.0"
-authors = ["Bryan Burgers <bryan.burgers@ravenind.com>"]
+authors = ["Bryan Burgers <bryan@burgers.io>"]
 
 [profile.release]
 lto = true
